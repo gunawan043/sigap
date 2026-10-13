@@ -5,7 +5,10 @@ namespace Tests\Feature;
 use App\Models\User;
 use App\Models\Attendance;
 use App\Models\JamAbsensi;
+use App\Models\Absensi;
 use App\Support\HariLibur;
+use App\Support\InsentifKehadiran;
+use Carbon\Carbon;
 use Illuminate\Foundation\Testing\DatabaseTransactions;
 use Tests\TestCase;
 
@@ -193,6 +196,23 @@ class PerbaikanSigapTest extends TestCase
         $this->actingAs($this->admin())
             ->get('/admin-absensi-rekap')
             ->assertOk();
+    }
+
+    public function test_alfa_dipotong_setara_satu_satuan_keterlambatan(): void
+    {
+        // Data uji: Zahratul Sep 2026 tanpa telat & tanpa lupa pulang, 1 hari alfa.
+        // 1x alfa = 1 satuan (toleransi/4 = 15 menit) = Rp25.000,
+        // sehingga insentif = 100.000 - 25.000 = 75.000.
+        $absensi = Absensi::first();
+        $user = User::findOrFail('2025200101696');
+        $awalMasuk = Carbon::createFromFormat('d M, Y', $user->awal_masuk);
+        $hariLibur = HariLibur::daftar('2026-09-01', '2026-09-30');
+
+        $hasil = InsentifKehadiran::hitung($user->id, $awalMasuk, 9, 2026, $absensi, $hariLibur);
+
+        $this->assertSame(1, $hasil['alpha']);
+        $this->assertEqualsWithDelta(25000, (float) $hasil['potongan'], 0.01);
+        $this->assertEqualsWithDelta(75000, (float) $hasil['insentif'], 0.01);
     }
 
     public function test_command_cek_insentif_berjalan(): void

@@ -16,8 +16,9 @@ use Carbon\Carbon;
  * - Insentif mulai dari nilai penuh (tunjangan_kehadiran).
  * - Akumulasi menit telat dibagi (toleransi/4), dibulatkan ke bawah,
  *   dikali pot_terlambat.
- * - Lupa absen pulang dan hari alfa masing-masing menambah `pot_absen`
- *   menit ke akumulasi.
+ * - Lupa absen pulang menambah `pot_absen` menit ke akumulasi.
+ * - Hari alfa dihitung setara satu satuan keterlambatan (toleransi/4 menit),
+ *   jadi 1x alfa = pot_terlambat (contoh: 15 menit = Rp25.000).
  * - Hasil akhir tidak pernah negatif.
  */
 class InsentifKehadiran
@@ -86,12 +87,18 @@ class InsentifKehadiran
             }
         }
 
-        // Lupa absen pulang & alfa dihitung sebagai tambahan menit
-        // sesuai pengaturan "pot_absen" (dalam menit).
-        $akumulasiMenit = $totalMenitTelat + (($jumlahLupaPulang + $jumlahAlpha) * $potAbsenMenit);
+        $satuan = $toleransi > 0 ? ($toleransi / 4) : 0;
+
+        // Lupa absen pulang menambah `pot_absen` menit (sesuai label pengaturan).
+        // Hari alfa dihitung setara SATU satuan keterlambatan (toleransi/4 menit),
+        // sehingga 1x alfa = Rp pot_terlambat (contoh: 15 menit = Rp25.000).
+        $menitAlfa = $satuan > 0 ? $satuan : 0;
+
+        $akumulasiMenit = $totalMenitTelat
+            + ($jumlahLupaPulang * $potAbsenMenit)
+            + ($jumlahAlpha * $menitAlfa);
 
         $potongan = 0;
-        $satuan = $toleransi > 0 ? ($toleransi / 4) : 0;
 
         if ($satuan > 0 && $akumulasiMenit > 0) {
             $potongan = floor($akumulasiMenit / $satuan) * $potTerlambat;
