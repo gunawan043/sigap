@@ -322,6 +322,8 @@ class KitirGajiController extends Controller
 
     /**
      * Hitung insentif kehadiran dari absensi pegawai pada bulan tertentu.
+     * Logikanya ada di App\Support\InsentifKehadiran supaya dipakai bersama
+     * oleh penggajian, halaman rekap, dan command pemeriksa.
      */
     private function hitungInsentifKehadiran(
         $userId,
@@ -331,80 +333,14 @@ class KitirGajiController extends Controller
         ?Absensi $absensi,
         array $hariLibur
     ): array {
-        $tunjangan = Angka::rupiah($absensi->tunjangan_kehadiran ?? 0);
-        $toleransi = Angka::rupiah($absensi->toleransi_keterlambatan ?? 0);
-        $potTerlambat = Angka::rupiah($absensi->pot_terlambat ?? 0);
-        $potAbsenMenit = Angka::rupiah($absensi->pot_absen ?? 0);
-
-        $awalBulan = Carbon::create($tahun, $bulan, 1)->startOfMonth();
-        $akhirBulan = $awalBulan->copy()->endOfMonth();
-
-        // Untuk bulan berjalan, hanya hitung sampai hari ini.
-        $batas = $awalBulan->isCurrentMonth() ? Carbon::today() : $akhirBulan->copy();
-        if ($batas->gt($akhirBulan)) {
-            $batas = $akhirBulan->copy();
-        }
-
-        $dataAbsensi = Attendance::where('user_id', $userId)
-            ->whereBetween('date', [$awalBulan->toDateString(), $akhirBulan->toDateString()])
-            ->get()
-            ->keyBy(function ($row) {
-                return (int) Carbon::parse($row->date)->day;
-            });
-
-        $totalMenitTelat = 0;
-        $jumlahLupaPulang = 0;
-        $jumlahAlpha = 0;
-
-        for ($tanggal = $awalBulan->copy(); $tanggal->lte($batas); $tanggal->addDay()) {
-            // Minggu libur
-            if ($tanggal->dayOfWeek === Carbon::SUNDAY) {
-                continue;
-            }
-
-            // Belum mulai bekerja
-            if ($tanggal->lt($awalMasuk->copy()->startOfDay())) {
-                continue;
-            }
-
-            // Periode libur
-            if (in_array($tanggal->toDateString(), $hariLibur, true)) {
-                continue;
-            }
-
-            $absen = $dataAbsensi->get($tanggal->day);
-
-            if (!$absen) {
-                // Tidak ada data absensi sama sekali = alfa
-                $jumlahAlpha++;
-                continue;
-            }
-
-            $totalMenitTelat += (int) ($absen->selisih_menit ?? 0);
-
-            if (!empty($absen->check_in_time) && empty($absen->check_out_time)) {
-                $jumlahLupaPulang++;
-            }
-        }
-
-        // Lupa absen pulang & alfa dihitung sebagai tambahan menit
-        // sesuai pengaturan "pot_absen" (dalam menit).
-        $akumulasiMenit = $totalMenitTelat + (($jumlahLupaPulang + $jumlahAlpha) * $potAbsenMenit);
-
-        $potongan = 0;
-        $satuan = $toleransi > 0 ? ($toleransi / 4) : 0;
-
-        if ($satuan > 0 && $akumulasiMenit > 0) {
-            $potongan = floor($akumulasiMenit / $satuan) * $potTerlambat;
-        }
-
-        return [
-            'insentif' => max(0, $tunjangan - $potongan),
-            'menit_telat' => $totalMenitTelat,
-            'lupa_pulang' => $jumlahLupaPulang,
-            'alpha' => $jumlahAlpha,
-            'potongan' => $potongan,
-        ];
+        return \App\Support\InsentifKehadiran::hitung(
+            $userId,
+            $awalMasuk,
+            $bulan,
+            $tahun,
+            $absensi,
+            $hariLibur
+        );
     }
 
     /**

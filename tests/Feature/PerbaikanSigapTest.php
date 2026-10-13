@@ -179,6 +179,28 @@ class PerbaikanSigapTest extends TestCase
             ->assertOk();
     }
 
+    public function test_rekap_absensi_bisa_pilih_bulan_sebelumnya(): void
+    {
+        $this->actingAs($this->admin())
+            ->get('/admin-absensi-rekap?bulan=2026-09')
+            ->assertOk()
+            ->assertSee('Insentif Hitung')
+            ->assertSee('Insentif Arsip');
+    }
+
+    public function test_rekap_absensi_default_bulan_ini(): void
+    {
+        $this->actingAs($this->admin())
+            ->get('/admin-absensi-rekap')
+            ->assertOk();
+    }
+
+    public function test_command_cek_insentif_berjalan(): void
+    {
+        $this->artisan('sigap:cek-insentif', ['periode' => 'Sep, 2026'])
+            ->assertExitCode(0);
+    }
+
     public function test_admin_bisa_membuka_halaman_kitir(): void
     {
         $this->actingAs($this->admin())
